@@ -5,6 +5,7 @@ import play.api.mvc._
 import play.api.Play.current
 import com.mongodb.casbah.{WriteConcern, MongoCollection, MongoConnection, MongoURI}
 import com.mongodb.{MongoException, ServerAddress}
+import com.mongodb.casbah.commons.MongoDBObject
 
 class SalatPlugin(app: Application) extends Plugin {
 
@@ -35,8 +36,20 @@ class SalatPlugin(app: Application) extends Plugin {
     }
 
     def collection(name: String) = connection(db)(name)
+    
+    def collection(name: String, pairs: Map[String, Any]): MongoCollection = {
+      val coll = if (connection(db).collectionExists(name)) {
+        connection(db)(name)
+      } else {
+        import com.mongodb.casbah.Implicits.mongoCollAsScala
+        connection(db).createCollection(name, MongoDBObject(pairs.toList)).asScala
+      }
+      coll
+    }
 
     def apply(name: String) = collection(name)
+    
+    def apply(name: String, pairs: Map[String, Any]) = collection(name, pairs)
 
     override def toString() = {
       (if (user.isDefined) user.get + "@" else "") +
@@ -126,7 +139,7 @@ class SalatPlugin(app: Application) extends Plugin {
   def source(source: String): MongoSource = {
     sources.get(source).getOrElse(throw configuration.reportError("mongodb." + source, source + " doesn't exist"))
   }
-
+  
   /**
    * Returns MongoCollection that has been configured in application.conf
    * @param collectionName The MongoDB collection name
@@ -134,4 +147,15 @@ class SalatPlugin(app: Application) extends Plugin {
    * @return A MongoCollection
    */
   def collection(collectionName:String, sourceName:String = "default"): MongoCollection = source(sourceName)(collectionName)
+  
+  /**
+   * Returns MongoCollection that has been configured in application.conf with extra options
+   * @param collectionName The MongoDB collection name
+   * @param options the options with which to create the collection
+   * @param sourceName The source name ex. default
+   * @return A MongoCollection
+   */
+  def collectionWithOptions(collectionName:String, options: Map[String, Any], sourceName:String = "default"): MongoCollection = {
+    source(sourceName)(collectionName, options)
+  }
 }
